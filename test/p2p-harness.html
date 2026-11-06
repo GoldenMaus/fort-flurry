@@ -1,0 +1,223 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Fort Flurry P2P harness</title>
+<script type="module">
+// Drives the shipped Session and hosting code from inside a real page. Nothing here
+// reimplements networking: it only starts sessions and records what they report.
+import { Session } from './js/net/session.js';
+import { detectMode, hostConnect, joinConnect } from './js/net/hosting.js';
+import { loadPeerJs, setPeerConfigOverride } from './js/net/transport-p2p.js';
+import { P2P_ID_PREFIX } from './shared/constants.js';
+
+const events = [];
+const stamp = (name, data) => events.push({ at: Math.round(performance.now()), name, data });
+let session = null;
+let timer = null;
+let frame = null;
+let last = 0;
+
+function track(s) {
+  session = s;
+  for (const name of ['lobby', 'start', 'meta', 'chat', 'result', 'reconnecting', 'reconnected', 'closed', 'error']) {
+    s.on(name, (arg) => stamp(name, name === 'meta' ? undefined : arg));
+  }
+  s.on('fx', (ev) => stamp('fx', { e: ev.e, t: ev.t }));
+  last = performance.now();
+  clearInterval(timer);
+  timer = setInterval(() => {
+    const now = performance.now();
+    if (frame) s.setFrameInput(frame);
+    s.update((now - last) / 1000);
+    last = now;
+  }, 16);
+}
+
+window.ff = {
+  events,
+  detectMode,
+  relayOnly: () => setPeerConfigOverride({ iceTransportPolicy: 'relay' }),
+  // The next N Math.random() calls return these values, then it is real again.
+  stubRandom(values) {
+    const real = Math.random;
+    const queue = [...values];
+    Math.random = () => (queue.length ? queue.shift() : real());
+  },
+  // Counts Peers that are still alive, so a leak after a cancel can be seen.
+  async trackPeers() {
+    const lib = await loadPeerJs();
+    const { Peer } = lib;
+    const made = [];
+    window.madePeers = made;
+    lib.Peer = class extends Peer {
+      constructor(...args) {
+        super(...args);
+        made.push(this);
+      }
+    };
+  },
+  livePeers: () => window.madePeers.filter((p) => !p.destroyed).length,
+  async hostThenCancel() {
+    const s = new Session(hostConnect('p2p'), { name: 'Quitter', look: {} });
+    track(s);
+    const started = s.start();
+    started.catch(() => {});
+    await new Promise((done) => setTimeout(done, 20));
+    s.leave();
+    return started.then(() => 'resolved', (e) => e.code);
+  },
+  async host(name) {
+    const s = new Session(hostConnect('p2p'), { name, look: { hat: 1 } });
+    track(s);
+    await s.start();
+    return { me: s.me, code: s.roomCode, token: s.token, kind: s.transport.kind };
+  },
+  async join(code, name, token) {
+    const s = new Session(joinConnect('p2p', code), { name, look: { hat: 2 }, token });
+    track(s);
+    const started = performance.now();
+    try {
+      await s.start();
+      return { ok: true, ms: Math.round(performance.now() - started), me: s.me, token: s.token, kind: s.transport.kind };
+    } catch (err) {
+      return { ok: false, ms: Math.round(performance.now() - started), code: err.code, msg: err.msg };
+    }
+  },
+  state() {
+    const s = session;
+    const v = s?.view;
+    return {
+      me: s?.me, connected: s?.connected, reconnecting: s?.reconnecting, netStatus: s?.netStatus, inMatch: s?.inMatch,
+      isHost: s?.isHost, ping: s?.ping, hostId: s?.lobby?.hostId, lobbyState: s?.lobby?.state, settings: s?.lobby?.settings,
+      players: s?.lobby?.players, renderTick: v?.renderTick, actors: v?.actors.length, phase: v?.phase, mode: v?.mode,
+      hasMe: !!v?.me, x: v?.me?.x, y: v?.me?.y, structs: v?.structs.length,
+    };
+  },
+  lobbyOp: (op, data) => session.lobbyOp(op, data),
+  chat: (text) => session.chat(text),
+  setFrame: (f) => { frame = f; },
+  leave: () => session.leave(),
+  eventsNamed: (name) => events.filter((e) => e.name === name),
+
+  // ---- what the host transport can see --------------------------------------------
+
+  remotes() {
+    return [...session.transport.remotes.values()].map((r) => ({ id: r.id, open: r.open, greeted: r.greeted }));
+  },
+  sendBig(remoteIndex, payload) {
+    const r = [...session.transport.remotes.values()][remoteIndex];
+    session.transport._sendRemote(r, payload);
+  },
+  // A real snapshot's first byte, enough for the back-pressure rule to recognize it.
+  sendFakeSnapshot(remoteIndex) {
+    const r = [...session.transport.remotes.values()][remoteIndex];
+    session.transport._sendRemote(r, new Uint8Array([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).buffer);
+  },
+  bufferedAmount(remoteIndex) {
+    return [...session.transport.remotes.values()][remoteIndex].conn.dataChannel.bufferedAmount;
+  },
+  sendBigBinary(remoteIndex, size) {
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bytes[i] = (i * 7) & 255;
+    const r = [...session.transport.remotes.values()][remoteIndex];
+    session.transport._sendRemote(r, bytes.buffer);
+  },
+  // The joiner keeps its own record of raw transport messages for the chunk checks.
+  captureRaw() {
+    const t = session.transport;
+    const inner = t.onmessage;
+    window.rawSeen = [];
+    t.onmessage = (data) => {
+      window.rawSeen.push(typeof data === 'string'
+        ? { type: 'text', length: data.length, head: data.slice(0, 16), tail: data.slice(-16) }
+        : { type: 'binary', length: data.byteLength, sum: new Uint8Array(data).reduce((a, b) => (a + b) & 0xffffff, 0) });
+      inner(data);
+    };
+  },
+  dropBroker() {
+    session.transport.peer.socket._socket?.close();
+  },
+  watchReconnects() {
+    const { peer } = session.transport;
+    const real = peer.reconnect.bind(peer);
+    window.reconnectTimes = [];
+    peer.reconnect = () => {
+      window.reconnectTimes.push(Math.round(performance.now()));
+      real();
+    };
+  },
+  brokerState() {
+    const { peer } = session.transport;
+    return { open: peer?.open, disconnected: peer?.disconnected, destroyed: peer?.destroyed, id: peer?.id };
+  },
+
+  // ---- hostile peers: raw PeerJS, none of our client code ----------------------------
+
+  async rawConnect(code, options) {
+    const { Peer, util } = await loadPeerJs();
+    const peer = new Peer({ debug: 0, config: util.defaultConfig });
+    await new Promise((done, fail) => {
+      peer.once('open', done);
+      peer.once('error', fail);
+    });
+    const conn = peer.connect(P2P_ID_PREFIX + code, options);
+    const out = { state: 'connecting', peer, conn, got: [] };
+    conn.on('open', () => { out.state = 'open'; });
+    conn.on('data', (d) => out.got.push(typeof d === 'string' ? d : `binary:${d.byteLength}`));
+    conn.on('close', () => { out.state = 'closed'; });
+    conn.on('error', () => { out.state = 'error'; });
+    (window.rawPeers ??= []).push(out);
+    return window.rawPeers.length - 1;
+  },
+  rawState: (i) => ({ state: window.rawPeers[i].state, got: window.rawPeers[i].got }),
+  async rawCall(code) {
+    const { peer } = window.rawPeers.at(-1);
+    const stream = document.createElement('canvas').captureStream(1);
+    const call = peer.call(P2P_ID_PREFIX + code, stream);
+    window.rawCallClosed = false;
+    call.on('close', () => { window.rawCallClosed = true; });
+    return true;
+  },
+  rawSend(i, kind, size = 0) {
+    const { conn } = window.rawPeers[i];
+    if (kind === 'chunk') conn.send(new Uint8Array([3, 0, 0, 0, 0, 0, 1, 0]).buffer);
+    else if (kind === 'huge') conn.send('x'.repeat(size));
+    else if (kind === 'hugeBinary') conn.send(new ArrayBuffer(size));
+    else if (kind === 'garbage') conn.send('{{{not json');
+    else if (kind === 'ping') conn.send(JSON.stringify({ t: 'ping', c: 1 }));
+    else conn.send(kind);
+  },
+
+  // Asks each bundled TURN server for a relay allocation directly, so a failure can be
+  // told apart from a failure of the whole PeerJS path.
+  async probeTurn(server, seconds) {
+    const { util } = await loadPeerJs();
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: server, username: util.defaultConfig.iceServers[1].username, credential: util.defaultConfig.iceServers[1].credential }],
+      iceTransportPolicy: 'relay',
+    });
+    const found = [];
+    const errors = [];
+    pc.onicecandidate = (e) => { if (e.candidate?.candidate) found.push(e.candidate.candidate); };
+    pc.onicecandidateerror = (e) => errors.push({ url: e.url, code: e.errorCode, text: e.errorText });
+    pc.createDataChannel('probe');
+    await pc.setLocalDescription(await pc.createOffer());
+    await new Promise((done) => setTimeout(done, seconds * 1000));
+    pc.close();
+    return { server, relayCandidates: found.filter((c) => c.includes(' typ relay')).length, errors };
+  },
+  async selectedPair() {
+    const pc = session.transport.conn?.peerConnection;
+    if (!pc) return null;
+    const stats = await pc.getStats();
+    let pair = null;
+    stats.forEach((r) => {
+      if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r;
+    });
+    if (!pair) return null;
+    const local = stats.get(pair.localCandidateId);
+    const remote = stats.get(pair.remoteCandidateId);
+    return { local: local?.candidateType, localProto: local?.protocol, relayProto: local?.relayProtocol, remote: remote?.candidateType, rtt: pair.currentRoundTripTime };
+  },
+};
+window.ffReady = true;
+</script>

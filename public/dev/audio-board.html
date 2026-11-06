@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fort Flurry audio board</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ink: #2b3a55; --soft: #6a7a97; --paper: #f4f6fb; --card: #fff; --line: #d9e1ef;
+    --accent: #3f8fc4; --warm: #d6404e; --good: #2f9e6e; --bad: #c8323c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 20px 60px; background: var(--paper); color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { margin: 0 0 2px; font-size: 22px; }
+  h2 { margin: 26px 0 8px; font-size: 15px; letter-spacing: .02em; }
+  h3 { margin: 14px 0 6px; font-size: 13px; color: var(--soft); font-weight: 600; }
+  p.note { margin: 0 0 12px; color: var(--soft); max-width: 72ch; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .top { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    font: inherit; color: var(--ink); background: #eaf0f9; border: 1px solid var(--line);
+    border-radius: 7px; padding: 5px 10px; cursor: pointer;
+  }
+  button:hover { background: #dde7f5; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.big { font-weight: 600; padding: 8px 14px; }
+  label.slider { display: grid; grid-template-columns: 74px minmax(0, 1fr) 38px; gap: 8px; align-items: center; margin: 6px 0; }
+  input[type=range] { width: 100%; }
+  canvas { display: block; width: 100%; border-radius: 7px; background: #eef2f9; }
+  #pad { aspect-ratio: 1; cursor: crosshair; }
+  #scope { height: 96px; margin-top: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+  .stat { background: var(--paper); border-radius: 7px; padding: 5px 8px; }
+  .stat b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11px; color: var(--soft); }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; color: var(--soft); font-weight: 600; }
+  th, td { padding: 3px 8px 3px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.fail { color: var(--bad); font-weight: 600; }
+  td.ok { color: var(--good); }
+  pre { margin: 0; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; overflow-x: auto; }
+  .scroll { overflow-x: auto; }
+  #status { color: var(--soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fort Flurry audio board</h1>
+  <p class="note">Every sound and track in the game, all synthesized. Click anywhere to unlock audio, then press things.</p>
+  <div class="top">
+    <div>
+      <div class="card">
+        <div class="row" id="transport"></div>
+        <h3>Music</h3>
+        <div class="row" id="tracks"></div>
+        <label class="slider" style="margin-top:10px"><span>Foes left</span><input id="foes" type="range" min="0" max="30" value="12"><output id="foesOut">12</output></label>
+        <label class="slider"><span>Boss hp</span><input id="bossHp" type="range" min="0" max="100" value="100"><output id="bossOut">100</output></label>
+        <canvas id="scope" width="720" height="192"></canvas>
+      </div>
+      <h2>Sim-named sounds (SFX)</h2>
+      <div class="row" id="named"></div>
+      <h2>Event sounds</h2>
+      <div id="events"></div>
+      <h2>Interface</h2>
+      <div class="row" id="ui"></div>
+      <h2>Every recipe, dry</h2>
+      <p class="note">Each sound by its internal name, centred, with no routing in the way.</p>
+      <div class="row" id="raw"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Position (drag the sound around the kid)</h3>
+      <canvas id="pad" width="540" height="540"></canvas>
+      <p class="note" id="padOut" style="margin:6px 0 10px"></p>
+      <label class="slider"><span>Master</span><input data-vol="master" type="range" min="0" max="100" value="80"><output>80</output></label>
+      <label class="slider"><span>Music</span><input data-vol="music" type="range" min="0" max="100" value="60"><output>60</output></label>
+      <label class="slider"><span>Effects</span><input data-vol="sfx" type="range" min="0" max="100" value="90"><output>90</output></label>
+      <div class="stats">
+        <div class="stat"><b id="sLive">0</b><span>live voices</span></div>
+        <div class="stat"><b id="sPeak">0</b><span>peak voices</span></div>
+        <div class="stat"><b id="sRate">0</b><span>rate drops</span></div>
+        <div class="stat"><b id="sCap">0</b><span>cap drops</span></div>
+      </div>
+      <p class="note" style="margin:10px 0 0">State: <b id="sState">locked</b>. Level: <b id="sLevel">0</b>. Notes: <b id="sNotes">0</b>.</p>
+    </div>
+  </div>
+
+  <h2>Self test</h2>
+  <p class="note">Renders everything offline through the real mixer and measures it. Nothing is played.</p>
+  <div class="row"><button class="big" id="runTest">Run self test</button><span id="status"></span></div>
+  <div class="scroll" id="report"></div>
+
+  <h2>Score</h2>
+  <p class="note">The tunes as written, each note marked against its chord.</p>
+  <div class="row" id="scoreTabs"></div>
+  <div class="card scroll" style="margin-top:8px"><pre id="score"></pre></div>
+</div>
+<script type="module" src="./audio-board.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fort Flurry UI harness</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    #harness-panel {
+      position: fixed; z-index: 99; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center;
+      padding: 6px 10px; border-radius: 10px; background: #111a; color: #fff; font: 13px/1 system-ui, sans-serif;
+    }
+    #harness-panel select { font-size: 13px; max-width: 220px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+    <div id="hud" hidden></div>
+    <div id="screens"></div>
+    <div id="dialogs"></div>
+    <div id="boot">Packing snow...</div>
+  </div>
+  <script>window.__ffHarness = true;</script>
+  <script type="module" src="ui-harness.js"></script>
+</body>
+</html>

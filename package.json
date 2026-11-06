@@ -1,0 +1,22 @@
+{
+  "name": "fort-flurry",
+  "version": "1.0.0",
+  "description": "Fort Flurry: a build-then-battle online snowball game for up to 8 friends.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node test/e2e/run.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "peerjs": "1.5.5",
+    "playwright-core": "^1.65.0"
+  }
+}
