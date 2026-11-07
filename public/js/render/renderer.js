@@ -771,7 +771,9 @@ export class Renderer {
     if (me) {
       fx = me.x;
       fy = me.y;
-      const lead = ui.lobbing ? 0.5 : ui.charge > 0 ? 0.2 : 0;
+      // Only a lob leads the camera, so its long reach stays on screen. An ordinary throw leaves the
+      // camera still: leading it lurched the view out and back on every throw.
+      const lead = ui.lobbing ? 0.5 : 0;
       if (lead) {
         fx += (ui.aimX - me.x) * lead;
         fy += (ui.aimY - me.y) * lead;
