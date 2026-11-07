@@ -244,6 +244,7 @@ export class Hud {
   enter() {
     this.memo.clear();
     this.tips.reset();
+    this.lastPhase = null;
     this.bannerQueue.length = 0;
     this.banner.hidden = true;
     this.deny.hidden = true;
@@ -326,6 +327,12 @@ export class Hud {
     const canBuild = view.phase === PHASE.BUILD || view.phase === PHASE.FIGHT;
     m.toggle(this.root, 'phase-build', view.phase === PHASE.BUILD);
     m.toggle(this.root, 'phase-fight', view.phase === PHASE.FIGHT);
+    if (view.phase !== this.lastPhase) {
+      // On touch a tool hides the throw stick, and in compact FIGHT the tray too, so a tool still
+      // out from BUILD would leave a phone player unable to throw. Put it away as the fight starts.
+      if (view.phase === PHASE.FIGHT && this.ui.input.mode === 'touch') this.ui.input.setTool(null);
+      this.lastPhase = view.phase;
+    }
     m.show(this.trayWrap, canBuild && !!me);
     const ready = meta.ready;
     m.show(this.readyBtn, view.phase === PHASE.BUILD && !!me);

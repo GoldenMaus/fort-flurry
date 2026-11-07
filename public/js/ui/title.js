@@ -240,7 +240,6 @@ export class JoinScreen {
       id: 'join-code',
       class: 'code-input',
       type: 'text',
-      maxlength: String(ROOM_CODE_LEN),
       autocapitalize: 'characters',
       autocomplete: 'off',
       autocorrect: 'off',
@@ -275,7 +274,9 @@ export class JoinScreen {
   // Rewriting value moves the caret to the end, so its position is carried across by hand.
   normalise() {
     const raw = this.input.value;
-    const clean = raw.toUpperCase().replace(/[^A-Z]/g, '').slice(0, ROOM_CODE_LEN);
+    // A pasted invite link brings its code, not the letters of "https".
+    const link = /[?&]join=([a-z]+)/i.exec(raw)?.[1];
+    const clean = (link ?? raw).toUpperCase().replace(/[^A-Z]/g, '').slice(0, ROOM_CODE_LEN);
     if (clean !== raw) {
       const caret = this.input.selectionStart ?? clean.length;
       const removed = raw.length - clean.length;

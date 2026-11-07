@@ -1684,6 +1684,24 @@ async function touchCheck(st, browser, base) {
     await wait(500);
     expect((await recorded(page)).counts.ball === held, 'a stick let go in the deadzone must not throw');
 
+    // A thumb on the stick must not swallow a tap on the tray: browsers only click for a lone finger.
+    const slot = await page.evaluate(() => {
+      const r = document.querySelector('.tool[data-tool="1"]').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await touch('touchStart', [{ x: 150, y: 300, id: 5 }]);
+    await wait(100);
+    await touch('touchStart', [{ x: 150, y: 300, id: 5 }, { ...slot, id: 6 }]);
+    await wait(60);
+    // touchEnd lifts the points it lists: the tapping finger goes up while the thumb stays down.
+    await touch('touchEnd', [{ ...slot, id: 6 }]);
+    await until('a second-finger tap to pick a tool', 2000, () => page.evaluate(() => window.__ff.input.tool === 1));
+    await touch('touchEnd', []);
+    await wait(700);
+    expect(await page.evaluate(() => window.__ff.input.tool === 1), 'one second-finger tap toggled the tool twice');
+    await page.tap('.tool[data-tool="1"]');
+    await until('a tap to put it away', 2000, () => page.evaluate(() => window.__ff.input.tool === null));
+
     await page.tap('#hud-slide');
     await page.tap('.tool[data-tool="0"]');
     await until('the tool', 2000, () => page.evaluate(() => window.__ff.input.tool === 0));
@@ -1693,7 +1711,13 @@ async function touchCheck(st, browser, base) {
     await wait(60);
     await touch('touchEnd', []);
     await until('a wall from a touch', 3000, async () => ((await peek(page)).structKinds[STRUCT.WALL] ?? 0) >= 1);
-    return `walked ${Math.round(a.x - b.x)} units, threw, cancelled and built by touch`;
+
+    // A tool still out when the fight starts is put away, or the throw stick would stay hidden.
+    await pressReady(page);
+    await until('the fight', 15000, async () => (await peek(page)).phase === 'fight');
+    await until('the tool put away', 2000, () => page.evaluate(() => window.__ff.input.tool === null));
+    expect(await page.evaluate(() => window.__ff.input.stickState().some((s) => s.kind !== 'move')), 'no throw stick in the fight');
+    return `walked ${Math.round(a.x - b.x)} units, threw, cancelled, built, tapped the tray with a thumb on the stick, and had the tool put away for the fight, all by touch`;
   } finally {
     await closePage(page);
   }

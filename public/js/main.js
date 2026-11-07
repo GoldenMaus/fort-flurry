@@ -9,7 +9,7 @@ import { Input } from './input.js';
 import { UI } from './ui/ui.js';
 import { Prefs } from './ui/store.js';
 import { ACTOR, CLOSE, ERR, LOBBY_OP, PHASE } from '../shared/schema.js';
-import { isValidCode } from '../shared/protocol.js';
+import { isValidCode, viewerWon } from '../shared/protocol.js';
 
 const SAVE_KEY = 'ff.session';
 const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'];
@@ -314,7 +314,7 @@ export class App {
   }
 
   onResult(result) {
-    const won = result.winners.includes(this.session.me);
+    const won = viewerWon(result, this.session.me);
     this.state = 'results';
     this.input.setInMatch(false);
     this.audio.setMusic(won ? 'win' : 'lose');

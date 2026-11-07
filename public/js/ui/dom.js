@@ -44,11 +44,25 @@ export function el(tag, attrs, ...kids) {
 
 export function clear(node) { node.replaceChildren(); return node; }
 
+const SECOND_FINGER_CLICK_MS = 600;
+
 // In-match buttons must never take keyboard focus: a focused button would swallow Space and Enter,
 // and on touch a focused element makes iOS scroll the page to reveal it.
 export function hudBtn(attrs, ...kids) {
   const btn = el('button', { type: 'button', tabindex: '-1', ...attrs }, ...kids);
   btn.addEventListener('pointerdown', (e) => e.preventDefault());
+  // Browsers only turn a lone finger into a click, so a tap made while a thumb holds a stick would
+  // do nothing. That tap clicks here instead, and a real click that follows anyway is dropped.
+  let tappedAt = -Infinity;
+  btn.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch' || e.isPrimary) return;
+    if (!btn.contains(document.elementFromPoint(e.clientX, e.clientY))) return;
+    tappedAt = e.timeStamp;
+    btn.click();
+  });
+  btn.addEventListener('click', (e) => {
+    if (e.isTrusted && e.timeStamp - tappedAt < SECOND_FINGER_CLICK_MS) e.stopImmediatePropagation();
+  }, true);
   return btn;
 }
 

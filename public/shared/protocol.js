@@ -238,6 +238,12 @@ export function makeRoomCode(rng) {
   return code;
 }
 
+// Siege is won or lost by the whole team, including a friend who joined too late for a kid of
+// their own. Elsewhere the winners list decides.
+export function viewerWon(result, me) {
+  return result.mode === MODE.SIEGE ? !!result.won : result.winners.includes(me);
+}
+
 export function isValidCode(code) {
   if (typeof code !== 'string' || code.length !== ROOM_CODE_LEN) return false;
   for (const ch of code) if (!ROOM_CODE_ALPHABET.includes(ch)) return false;

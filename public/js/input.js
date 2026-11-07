@@ -710,7 +710,8 @@ export class Input extends Emitter {
         const view = this.view;
         if (view?.me && view.cw) {
           const target = this.toolTarget(view);
-          if (target) this.startPaint(target, false);
+          // A press on a hurt Colonel is a patch, which painting never places: release uses the tool.
+          if (target && this.judge(view, this._tool, target) !== 'patch') this.startPaint(target, false);
         }
       }
       return;

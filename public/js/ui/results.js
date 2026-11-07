@@ -1,6 +1,7 @@
 // End of a match. Who sees Play Again follows hostId live, because the host can change while this
 // screen is open (SPEC 11.2).
 import { MODE, TEAM_NAME } from '../../shared/schema.js';
+import { viewerWon } from '../../shared/protocol.js';
 import { el } from './dom.js';
 import { AWARD_COPY } from './copy.js';
 import { kidCanvas } from './kidview.js';
@@ -11,7 +12,7 @@ import { menuButton } from './title.js';
 const MAX_HEROES = 6;
 
 function headline(result, meId, names) {
-  const won = result.winners.includes(meId);
+  const won = viewerWon(result, meId);
   if (result.mode === MODE.SIEGE) return won ? 'You held the block!' : 'Colonel Carrot took a tumble';
   if (result.mode === MODE.FORTWARS) {
     if (won) return 'Your fort is still standing!';
@@ -58,7 +59,7 @@ export class ResultsScreen {
     const session = this.ui.session;
     const info = this.playerInfo();
     const names = new Map([...info].map(([id, p]) => [id, p.name]));
-    const won = result.winners.includes(session.me);
+    const won = viewerWon(result, session.me);
     this.root.classList.toggle('won', won);
     this.root.classList.toggle('lost', !won);
     this.title.textContent = headline(result, session.me, names);
