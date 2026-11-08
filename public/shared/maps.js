@@ -496,6 +496,53 @@ function recessYard() {
   };
 }
 
-export const MAPS = [mapleCourt(), wobblePond(), recessYard()];
+// ---- Corner Lot ---------------------------------------------------------------
+// Classic's arena (SPEC 2.4): a small snowy lot between two back fences, nearly one screen,
+// a little cover on each side and a frozen puddle in the middle where the Iceball turns up.
+function cornerLot() {
+  const W = 1320, H = 780, AX = 660;
+  const west = [
+    dot('pine', 70, 80, 34), dot('pine', 70, 700, 34), dot('pine', 190, 40, 26), dot('pine', 190, 742, 26),
+    box('bench', 300, 168, 96, 26), box('bench', 300, 586, 96, 26),
+    dot('bush', 455, 390, 24),
+    dot('rock', 560, 240, 20), dot('rock', 560, 540, 20),
+    dot('bin', 250, 390, 14),
+    dot('lamp', 120, 250, 8), dot('lamp', 120, 530, 8),
+  ];
+  const forts = [{ x: 170, y: 390 }, { x: W - 170, y: 390 }];
+  const home = [
+    { x: 170, y: 330 }, { x: 170, y: 450 }, { x: 230, y: 280 }, { x: 230, y: 500 },
+    { x: 110, y: 390 }, { x: 290, y: 330 }, { x: 290, y: 450 }, { x: 140, y: 600 },
+  ];
+  return {
+    id: 'lot', theme: 'court', name: 'Corner Lot', modes: ['classic'],
+    blurb: 'A small snowy lot between two back fences. Eight seconds to dig in, then nowhere to hide for long.',
+    w: W, h: H, obstacles: withTwins(west, AX),
+    ice: [{ shape: 'ellipse', x: AX, y: 390, rx: 64, ry: 36 }],
+    fort: { x: AX, y: 390 },
+    forts,
+    truce: { axis: 'x', at: AX },
+    pickupSpot: { x: AX, y: 390 },
+    spawns: {
+      siege: home,
+      fortwars: [home, twinList(home, AX)],
+      ffa: twinPoints(home.slice(0, 4), AX),
+    },
+    entrances: [],
+    truckPath: [],
+    lights: [...twinPoints([lamp(120, 250), lamp(120, 530)], AX), ...fortGlows(forts[0], [forts[1]])],
+    decor: [
+      { type: 'snowpatch', x: 420, y: 250, w: 220, h: 110 }, { type: 'snowpatch', x: W - 640, y: 420, w: 220, h: 110 },
+      { type: 'drift', x: 330, y: 70 }, { type: 'drift', x: W - 330, y: 710 },
+      { type: 'drift', x: 600, y: 700, scale: 0.9 }, { type: 'drift', x: W - 600, y: 80, scale: 0.9 },
+      { type: 'sled', x: 60, y: 420, scale: 0.8 },
+    ],
+  };
+}
 
-export const getMap = (id) => MAPS.find((m) => m.id === id) ?? MAPS[0];
+export const MAPS = [mapleCourt(), wobblePond(), recessYard()];
+// Classic plays on its own lot, which no other mode offers (SPEC 2.4).
+export const ARENAS = [cornerLot()];
+export const mapsForMode = (mode) => (mode === 'classic' ? ARENAS : MAPS);
+
+export const getMap = (id) => MAPS.find((m) => m.id === id) ?? ARENAS.find((m) => m.id === id) ?? MAPS[0];

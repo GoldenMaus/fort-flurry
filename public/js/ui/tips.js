@@ -12,6 +12,11 @@ const TIPS = Object.freeze({
     touch: 'Protect Colonel Carrot! Tap a tool, then touch near him to build.',
     pad: 'Protect Colonel Carrot! Press RB for a tool, then X near him to build.',
   },
+  classicBuild: {
+    kbm: 'Place 3 free things on your side: press 1, 3 or 4, then click the snow.',
+    touch: 'Place 3 free things on your side: tap a tool, then touch the snow.',
+    pad: 'Place 3 free things on your side: press RB for a tool, then X.',
+  },
   ready: {
     kbm: "Press R when you're ready.",
     touch: "Tap Ready when you're ready.",
@@ -68,7 +73,7 @@ export class TipEngine {
     const build = phase === PHASE.BUILD;
     if (!me || !you) return null;
 
-    if ((me.flags & AFLAG.FROZEN) && !seen('frozen')) return 'frozen';
+    if ((me.flags & AFLAG.FROZEN) && mode !== MODE.CLASSIC && !seen('frozen')) return 'frozen';
 
     let thief = false;
     let lid = false;
@@ -87,10 +92,11 @@ export class TipEngine {
       this.lowSnowAt = now;
       return 'lowSnow';
     }
-    if (friendFrozen && !seen('thawFriend')) return 'thawFriend';
+    if (friendFrozen && mode !== MODE.CLASSIC && !seen('thawFriend')) return 'thawFriend';
     if (session?.offer && !seen('offer')) return 'offer';
     if (fight && !seen('throw')) return 'throw';
-    if (build && mode !== MODE.FFA && !seen('firstBuild')) return 'firstBuild';
+    if (build && mode === MODE.CLASSIC && !seen('classicBuild')) return 'classicBuild';
+    if (build && mode !== MODE.FFA && mode !== MODE.CLASSIC && !seen('firstBuild')) return 'firstBuild';
     const team = me.team;
     const flakes = meta?.flakes?.[team] ?? 0;
     const late = view.secondsLeft !== null && view.secondsLeft !== undefined && view.secondsLeft <= 10;

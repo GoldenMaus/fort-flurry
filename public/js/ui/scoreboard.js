@@ -1,5 +1,6 @@
 // Who is doing what. Held open with Tab or View, tapped open on touch, and reused on the results screen.
 import { MODE, TEAM, TEAM_NAME } from '../../shared/schema.js';
+import { TEAM_MODES } from '../../shared/schema.js';
 import { TEAM_STYLE } from '../../shared/constants.js';
 import { el } from './dom.js';
 import { kidCanvas } from './kidview.js';
@@ -66,6 +67,6 @@ export class Scoreboard {
     if (key === this.key) return;
     this.key = key;
     const rows = scoreRows(view.meta.scores, view.players);
-    this.body.replaceChildren(statRows(rows, this.ui.session?.me, view.mode === MODE.FORTWARS));
+    this.body.replaceChildren(statRows(rows, this.ui.session?.me, TEAM_MODES.includes(view.mode)));
   }
 }

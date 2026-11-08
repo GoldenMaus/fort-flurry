@@ -19,7 +19,8 @@ import {
   launch, openPage, peek, playLoop, pointAt, press, recorded, screenOf, setupLobby, shot, startMatch, until, wait, walkTo,
 } from './lib.mjs';
 
-const MODES = Object.values(MODE);
+// Classic has its own arena and its own checks, so the every-mode-on-every-map matrix leaves it out.
+const MODES = Object.values(MODE).filter((m) => m !== MODE.CLASSIC);
 const MAPS = MAP_LIST.map((m) => m.id);
 const FOE_KINDS = [ACTOR.PIPSQUEAK, ACTOR.SLINGER, ACTOR.LOBBER, ACTOR.BRUISER, ACTOR.SLEDDER, ACTOR.LIDKID, ACTOR.SNEAK];
 const seconds = (ms) => (ms / 1000).toFixed(1);

@@ -4,7 +4,8 @@ import {
   DIFFICULTY, LOBBY_OP, MODE, MODE_NAME, TEAM, TEAM_NAME,
 } from '../../shared/schema.js';
 import { LOOK, MAX_PLAYERS, NAME_MAX, ROOM_CODE_LEN, SIEGE, TEAM_STYLE } from '../../shared/constants.js';
-import { MAPS, getMap } from '../../shared/maps.js';
+import { ARENAS, MAPS, getMap, mapsForMode } from '../../shared/maps.js';
+import { TEAM_MODES } from '../../shared/schema.js';
 import { clear, el } from './dom.js';
 import { ICON } from './art.js';
 import { DIFFICULTY_NAME, LENGTH_NAME, MODE_BLURB } from './copy.js';
@@ -233,7 +234,7 @@ export class LobbyScreen {
   }
 
   teamPaint() {
-    return this.state?.settings.mode === MODE.FORTWARS ? this.mePlayer()?.team : undefined;
+    return TEAM_MODES.includes(this.state?.settings.mode) ? this.mePlayer()?.team : undefined;
   }
 
   paintEditor() {
@@ -327,7 +328,7 @@ export class LobbyScreen {
     this.crewCount.textContent = `${state.players.length}/${MAX_PLAYERS}`;
     const ctx = { meId: session.me, hostId: state.hostId, canEdit };
     clear(this.crewBody);
-    if (state.settings.mode === MODE.FORTWARS) {
+    if (TEAM_MODES.includes(state.settings.mode)) {
       this.crewBody.className = 'crew-body crew-teams';
       for (const team of [TEAM.A, TEAM.B]) {
         const grid = el('div', { class: 'crew-grid' },
@@ -355,7 +356,7 @@ export class LobbyScreen {
     this.modeBlurb = el('p', { class: 'setup-blurb' });
     this.mapRow = el('div', { class: 'map-row', role: 'radiogroup', 'aria-label': 'Map' });
     this.mapBtns = new Map();
-    for (const map of MAPS) {
+    for (const map of [...MAPS, ...ARENAS]) {
       const thumb = el('canvas', { class: 'map-thumb', 'aria-hidden': 'true' });
       paintMap(thumb, map, 104, 70);
       const btn = el('button', {
@@ -389,6 +390,7 @@ export class LobbyScreen {
     this.modeSeg.set(settings.mode, locked);
     this.modeBlurb.textContent = MODE_BLURB[settings.mode] ?? '';
     for (const [id, btn] of this.mapBtns) {
+      btn.hidden = !mapsForMode(settings.mode).some((m) => m.id === id);
       const on = id === settings.mapId;
       btn.classList.toggle('on', on);
       btn.setAttribute('aria-checked', String(on));
@@ -414,9 +416,9 @@ export class LobbyScreen {
   // Why Start is greyed out, or null if it isn't. Room checks the same rules (SPEC 8.3).
   startBlocker() {
     const { settings, players } = this.state;
-    if (settings.mode === MODE.FORTWARS) {
+    if (TEAM_MODES.includes(settings.mode)) {
       const has = (team) => players.some((p) => p.team === team);
-      if (!has(TEAM.A) || !has(TEAM.B)) return `${MODE_NAME.fortwars} needs a kid on each team.`;
+      if (!has(TEAM.A) || !has(TEAM.B)) return `${MODE_NAME[settings.mode]} needs a kid on each team.`;
     }
     if (settings.mode === MODE.FFA && players.length < 2) return `${MODE_NAME.ffa} needs at least 2 kids.`;
     return null;
@@ -473,7 +475,7 @@ export class LobbyScreen {
     this.chat.root.hidden = !!solo;
     this.readyBtn.hidden = !!solo;
 
-    const fortwars = state.settings.mode === MODE.FORTWARS;
+    const fortwars = TEAM_MODES.includes(state.settings.mode);
     this.teamPick.hidden = !fortwars;
     if (fortwars && me) {
       this.teamBtns.forEach((btn, i) => {

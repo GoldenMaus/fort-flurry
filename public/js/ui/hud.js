@@ -3,7 +3,7 @@
 import {
   ACTOR, AFLAG, EMOTES, EV, MODE, PHASE, PICKUP, STRUCT, TEAM, TEAM_NAME,
 } from '../../shared/schema.js';
-import { BUILD, FFA, FOES, KID, SPECIAL, TEAM_STYLE } from '../../shared/constants.js';
+import { BUILD, CLASSIC, FFA, FOES, KID, SPECIAL, TEAM_STYLE } from '../../shared/constants.js';
 import { Memo, clamp01, el, fmtClock, hudBtn } from './dom.js';
 import { ICON } from './art.js';
 import { iconNode } from './kidview.js';
@@ -315,16 +315,19 @@ export class Hud {
     if (this.flakesShown !== null && flakes > this.flakesShown) this.pulse(this.flakes, 'bump');
     this.flakesShown = flakes;
     m.text(this.flakesNum, String(flakes));
+    m.show(this.flakes, view.mode !== MODE.CLASSIC);
 
     const frozen = hasFlag(me, AFLAG.FROZEN);
     m.show(this.frozenMsg, frozen);
     if (frozen) {
       const secs = you?.frozenT ?? 0;
-      m.text(this.frozenMsg, view.mode === MODE.SIEGE ? `You're frozen! Thawing in ${secs}` : `Back in ${secs}`);
+      let msg = view.mode === MODE.SIEGE ? `You're frozen! Thawing in ${secs}` : `Back in ${secs}`;
+      if (view.mode === MODE.CLASSIC) msg = 'Knocked out! Back next round';
+      m.text(this.frozenMsg, msg);
     }
     m.show(this.hopIn, !me);
 
-    const canBuild = view.phase === PHASE.BUILD || view.phase === PHASE.FIGHT;
+    const canBuild = view.phase === PHASE.BUILD || (view.phase === PHASE.FIGHT && view.mode !== MODE.CLASSIC);
     m.toggle(this.root, 'phase-build', view.phase === PHASE.BUILD);
     m.toggle(this.root, 'phase-fight', view.phase === PHASE.FIGHT);
     if (view.phase !== this.lastPhase) {
@@ -365,7 +368,12 @@ export class Hud {
     const max = Math.max(1, you.maxWarmth);
     const frac = clamp01(you.warmth / max);
     m.style(this.warmthFill, 'transform', `scaleX(${frac.toFixed(3)})`);
-    m.text(this.warmthNum, String(Math.ceil(you.warmth)));
+    if (view.mode === MODE.CLASSIC) {
+      const hearts = Math.round(frac * CLASSIC.hits);
+      m.text(this.warmthNum, '♥'.repeat(hearts) + '♡'.repeat(CLASSIC.hits - hearts));
+    } else {
+      m.text(this.warmthNum, String(Math.ceil(you.warmth)));
+    }
     m.toggle(this.warmth, 'low', frac < 0.3);
 
     if (this.pipNodes.length !== you.maxBalls) {
@@ -428,7 +436,7 @@ export class Hud {
     if (mode === MODE.SIEGE) {
       const of = view.waveCount ? ` of ${view.waveCount}` : '';
       line = `Wave ${view.wave}${of}: ${view.waveName ?? ''}`;
-    } else if (mode === MODE.FORTWARS) {
+    } else if (mode === MODE.FORTWARS || mode === MODE.CLASSIC) {
       const a = meta.roundWins?.[TEAM.A] ?? 0;
       const b = meta.roundWins?.[TEAM.B] ?? 0;
       line = `Round ${meta.round ?? 1} · ${a} to ${b}`;
@@ -491,19 +499,31 @@ export class Hud {
     const flakes = meta.flakes?.[team] ?? 0;
     let pults = 0;
     for (const s of view.structs ?? []) if (s.kind === STRUCT.PULT && s.team === team) pults += 1;
+    const classic = view.mode === MODE.CLASSIC;
     for (const [k, t] of this.tools) {
+      // Classic offers three tools, free, and counts what each kid has placed instead.
+      m.show(t.btn, !classic || k === 'demolish' || CLASSIC.tools.includes(k));
       if (k === 'demolish') continue;
-      m.toggle(t.btn, 'poor', flakes < t.info.cost);
+      m.text(t.cost, classic ? 'free' : String(t.info.cost));
+      m.toggle(t.btn, 'poor', !classic && flakes < t.info.cost);
       if (k === STRUCT.PULT) {
-        const limit = meta.pultLimit?.[team];
+        const limit = classic ? undefined : meta.pultLimit?.[team];
         m.show(t.count, limit !== undefined);
         if (limit !== undefined) m.text(t.count, `${pults}/${limit}`);
       }
     }
     const share = you?.spendLeft;
-    const fair = share !== undefined && share !== UNLIMITED_SHARE;
-    m.show(this.share, fair);
-    if (fair) m.text(this.share, `Your share: ${share}`);
+    const fair = !classic && share !== undefined && share !== UNLIMITED_SHARE;
+    if (classic) {
+      let mine = 0;
+      for (const s of view.structs ?? []) if (s.ownerId === session.me) mine += 1;
+      const left = Math.max(0, CLASSIC.itemsPerKid - mine);
+      m.show(this.share, view.phase === PHASE.BUILD);
+      m.text(this.share, left === 1 ? '1 thing left to place' : `${left} things left to place`);
+    } else {
+      m.show(this.share, fair);
+      if (fair) m.text(this.share, `Your share: ${share}`);
+    }
 
     const solo = this.ui.roomInfo.solo;
     const ping = Math.round(session.ping ?? 0);

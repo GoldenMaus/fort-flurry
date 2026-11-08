@@ -48,6 +48,7 @@ export const MODE_BLURB = Object.freeze({
   [MODE.SIEGE]: 'Everyone together. Keep Colonel Carrot standing through every wave.',
   [MODE.FORTWARS]: 'Two teams, two Colonels. Knock down theirs before they knock down yours.',
   [MODE.FFA]: 'Every kid for themselves. Most freezes wins.',
+  [MODE.CLASSIC]: 'Quick knockout duels. Eight seconds to place three things, then three hits and you are out. First to win 3 rounds takes it.',
 });
 
 export const DIFFICULTY_NAME = Object.freeze({

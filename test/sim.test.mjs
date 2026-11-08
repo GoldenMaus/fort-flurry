@@ -3997,6 +3997,7 @@ test('events: a kid\'s every state change is reported for the HUD', () => {
 const META_KEYS = [
   'phase', 'wave', 'waveCount', 'waveName', 'waveSub', 'endsAtTick', 'dayT', 'blizzard', 'flakes', 'colonels', 'foesLeft',
   'round', 'roundWins', 'boss', 'ready', 'scores', 'truce', 'suddenDeath', 'next', 'cards', 'leaderId', 'pultLimit', 'patchesLeft',
+  'speedMul',
 ];
 
 test('meta: exact shape in every mode, and JSON-safe', () => {

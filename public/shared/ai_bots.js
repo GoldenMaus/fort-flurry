@@ -6,6 +6,8 @@
 import { ACTOR, AFLAG, AUX, BALL, BTN, CMD, DIFFICULTY, EMOTES, MODE, PHASE, PICKUP, STRUCT, TEAM } from './schema.js';
 import { BUILD, CELL, FOES, KID, REPAIR_COST_MUL, SIM_HZ, THROW } from './constants.js';
 import { angleGap, structCentre } from './ai_foes.js';
+import { CLASSIC } from './constants.js';
+import { canPlace } from './physics.js';
 
 const UNSEEN = AFLAG.FLEEING | AFLAG.FROZEN | AFLAG.GRACE;
 const VISION = 900;
@@ -473,6 +475,40 @@ function choosePost(g, kid, ai) {
   return standableNear(g, fort.x + ux * out - uy * side, fort.y + uy * out + ux * side, true);
 }
 
+// Classic: each bot places its own three free things in the 8 s BUILD: a wall in front first,
+// then a decoy out ahead to draw fire, then a flinger tucked behind. Cells come from the same
+// canPlace the host uses, so a bot never sends a build the host would refuse.
+function placeClassicItem(g, kid, ai) {
+  if (g.time < (ai.nextPlaceAt ?? 0)) return;
+  ai.nextPlaceAt = g.time + 0.45 + g.rng() * 0.5;
+  let mine = 0;
+  let pults = 0;
+  for (const s of g.structs.values()) {
+    if (s.ownerId !== kid.id) continue;
+    mine += 1;
+    if (s.kind === STRUCT.PULT) pults += 1;
+  }
+  if (mine >= CLASSIC.itemsPerKid) return;
+  const order = [STRUCT.WALL, STRUCT.DECOY, STRUCT.PULT];
+  let kind = order[Math.min(mine, order.length - 1)];
+  if (kind === STRUCT.PULT && pults >= CLASSIC.pultsPerKid) kind = STRUCT.WALL;
+  const ahead = kid.team === TEAM.A ? 1 : -1;
+  const { cx, cy } = g.cw.cellOf(kid.x, kid.y);
+  const spots = {
+    [STRUCT.WALL]: [[2, 0], [2, -1], [2, 1], [3, 0], [1, 1], [1, -1], [3, 1], [3, -1]],
+    [STRUCT.DECOY]: [[3, -2], [3, 2], [2, -2], [2, 2], [3, 0], [1, 2], [1, -2]],
+    [STRUCT.PULT]: [[-1, 1], [-1, -1], [0, 2], [0, -2], [-2, 0], [1, 1], [1, -1]],
+  }[kind];
+  const q = g.placementQuery(kid);
+  for (const [ox, oy] of spots) {
+    const tx = cx + ahead * ox;
+    const ty = cy + oy;
+    if (canPlace(g.cw, q, kind, tx, ty) !== 'ok') continue;
+    g.command(kid.id, { c: CMD.BUILD, k: kind, cx: tx, cy: ty });
+    return;
+  }
+}
+
 function runBuild(g, kid, ai, book, f) {
   if (ai.phase !== g.phase) {
     ai.phase = g.phase;
@@ -480,7 +516,8 @@ function runBuild(g, kid, ai, book, f) {
     ai.shot = null;
     ai.target = null;
   }
-  spendFlakes(g, kid, book);
+  if (g.mode === MODE.CLASSIC) placeClassicItem(g, kid, ai);
+  else spendFlakes(g, kid, book);
   // Standing still is all packing takes, so arriving at the post tops the bot up for free.
   const job = worstDamage(g, kid, book, Infinity);
   if (job) {
@@ -697,7 +734,7 @@ function planFaceOff(g, kid, ai, book) {
 function planFfa(g, kid, ai, book) {
   const enemies = hostiles(g, kid);
   const closest = nearestOf(enemies, kid.x, kid.y);
-  spendFlakes(g, kid, book);
+  if (g.mode !== MODE.CLASSIC) spendFlakes(g, kid, book);
 
   // Humans read as a little farther away than they are, and nobody piles onto a kid two
   // others are already after, so a new player is never the whole room's only target.

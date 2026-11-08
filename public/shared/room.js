@@ -3,6 +3,7 @@
 // Everything a conn sends is hostile until proven otherwise; liveness is the
 // transports' job, not Room's.
 import {
+  TEAM_MODES,
   CLOSE, CMD, EMOTES, ERR, EV, LOBBY_OP, MODE, MSG, PROTOCOL_VERSION, TEAM,
 } from './schema.js';
 import {
@@ -429,7 +430,7 @@ export class Room {
       let n = 0;
       while (used.has(TEAM.FFA_BASE + n)) n += 1;
       slot.team = TEAM.FFA_BASE + n;
-    } else if (this.settings.mode === MODE.FORTWARS) {
+    } else if (TEAM_MODES.includes(this.settings.mode)) {
       if (slot.pick !== null) {
         slot.team = slot.pick;
         return;
@@ -502,7 +503,7 @@ export class Room {
       case LOBBY_OP.ADD_BOT: {
         if (msg.team !== undefined && !Number.isInteger(msg.team)) return this._malformed(c);
         if (!host || !inLobby) return undefined;
-        const fortwars = this.settings.mode === MODE.FORTWARS;
+        const fortwars = TEAM_MODES.includes(this.settings.mode);
         return this._addBot(fortwars && (msg.team === TEAM.A || msg.team === TEAM.B) ? msg.team : null);
       }
       case LOBBY_OP.DEL_BOT: {
@@ -539,7 +540,7 @@ export class Room {
       slot.ready = !!msg.ready;
       changed = true;
     }
-    if (this.settings.mode === MODE.FORTWARS && (msg.team === TEAM.A || msg.team === TEAM.B)) {
+    if (TEAM_MODES.includes(this.settings.mode) && (msg.team === TEAM.A || msg.team === TEAM.B)) {
       slot.pick = msg.team;
       slot.team = msg.team;
       changed = true;
@@ -618,7 +619,7 @@ export class Room {
   _canStart() {
     const slots = [...this.slots.values()];
     if (this.settings.mode === MODE.FFA) return slots.length >= 2;
-    if (this.settings.mode === MODE.FORTWARS) {
+    if (TEAM_MODES.includes(this.settings.mode)) {
       return slots.some((s) => s.team === TEAM.A) && slots.some((s) => s.team === TEAM.B);
     }
     return slots.length >= 1;

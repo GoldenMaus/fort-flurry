@@ -7,6 +7,7 @@
 // where a last-digit difference is far below what reconciliation corrects anyway.
 
 import { AFLAG, BTN, MODE, PHASE, STRUCT } from './schema.js';
+import { CLASSIC } from './constants.js';
 import {
   BUILD, CELL, KID, MAX_STRUCTS_PER_TEAM, REPAIR_COST_MUL, SIEGE, TEAMMATE_DEMOLISH_RANGE,
 } from './constants.js';
@@ -580,6 +581,8 @@ export function repairCost(kind) {
 export function canPlace(cw, q, kind, cx, cy) {
   const spec = BUILD[kind];
   if (spec === undefined || kind === STRUCT.COLONEL) return 'badCell';
+  // Classic: three free things per kid, from three tools, placed only in BUILD (SPEC 2.4).
+  if (q.mode === MODE.CLASSIC && (!CLASSIC.tools.includes(kind) || q.phase !== PHASE.BUILD)) return 'badCell';
   if (cw.hasObstacleOverlap(cx, cy)) return 'badCell';
 
   const midX = (cx + 0.5) * CELL;
@@ -592,7 +595,8 @@ export function canPlace(cw, q, kind, cx, cy) {
       if (dx * dx + dy * dy < reach) return 'badCell';
     }
   }
-  if (((cw.truce && cw.truce.active) || q.mode === MODE.FORTWARS) && !onOwnHalf(cw, q.team, cx, cy)) return 'badCell';
+  const twoSides = q.mode === MODE.FORTWARS || q.mode === MODE.CLASSIC;
+  if (((cw.truce && cw.truce.active) || twoSides) && !onOwnHalf(cw, q.team, cx, cy)) return 'badCell';
 
   const dx = midX - q.x;
   const dy = midY - q.y;
@@ -600,6 +604,7 @@ export function canPlace(cw, q, kind, cx, cy) {
 
   const here = structInCell(q.structs, cx, cy);
   if (here !== null) {
+    if (q.mode === MODE.CLASSIC) return 'badCell';
     if (here.team === q.team && here.kind === kind && here.hp < here.maxHp) {
       return spendRefusal(q, repairCost(kind)) ?? 'repair';
     }
@@ -622,6 +627,19 @@ export function canPlace(cw, q, kind, cx, cy) {
   }
   if (teamStructs >= MAX_STRUCTS_PER_TEAM) return 'limit';
   if (kind === STRUCT.PULT && teamPults >= q.pultLimit) return 'limit';
+
+  if (q.mode === MODE.CLASSIC) {
+    // Counted from what this kid owns, so demolishing one gives the placement back.
+    let mine = 0;
+    let myPults = 0;
+    for (const s of listOf(q.structs)) {
+      if (s.ownerId !== q.me) continue;
+      mine++;
+      if (s.kind === STRUCT.PULT) myPults++;
+    }
+    if (mine >= CLASSIC.itemsPerKid || (kind === STRUCT.PULT && myPults >= CLASSIC.pultsPerKid)) return 'limit';
+    return 'ok';
+  }
 
   return spendRefusal(q, spec.cost) ?? 'ok';
 }

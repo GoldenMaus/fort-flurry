@@ -134,6 +134,15 @@ export const FFA = Object.freeze({
   respawnTime: 3, pickupEvery: 12, leaderBonusLead: 3,
 });
 
+// Classic: fast knockout duels (SPEC 2.4). No Flakes and no Colonel: every kid gets a few free
+// placements and three hearts, and stays out for the round once knocked out.
+export const CLASSIC = Object.freeze({
+  buildTime: 8, itemsPerKid: 3, pultsPerKid: 1,
+  tools: Object.freeze([STRUCT.WALL, STRUCT.DECOY, STRUCT.PULT]),
+  hits: 3, iceHits: 2, roundTime: 75, roundEndTime: 4, roundsToWin: 3,
+  speedUpPerRound: 1.08, maxSpeedUp: 1.4, pickupEvery: 15,
+});
+
 export const DIFF = Object.freeze({
   [DIFFICULTY.COZY]:     { hp: 0.75, dmg: 0.7,  count: 0.85 },
   [DIFFICULTY.NORMAL]:   { hp: 1,    dmg: 1,    count: 1 },

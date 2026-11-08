@@ -1,6 +1,7 @@
 // Pass 8: everything that sits on the glass, ungraded, in CSS pixels. Name tags, speech, numbers,
 // lens splats, edge arrows and on-screen sticks.
 import { ACTOR, AFLAG, MODE, STRUCT } from '../../shared/schema.js';
+import { TEAM_MODES } from '../../shared/schema.js';
 import { CELL, LOOK, TEAM_STYLE } from '../../shared/constants.js';
 import { P, teamColor } from './palette.js';
 import { TextBank, bakeEdgeArrow, bakeEdgeGlyph, bakeLensSplat, bakeFrost } from './hudart.js';
@@ -123,7 +124,7 @@ export class Overlay {
   // ---- draw -----------------------------------------------------------------
 
   tagColorFor(actor, player, view) {
-    if (view.mode === MODE.FORTWARS) return TEAM_STYLE[actor.team]?.color ?? teamColor(actor.team);
+    if (TEAM_MODES.includes(view.mode)) return TEAM_STYLE[actor.team]?.color ?? teamColor(actor.team);
     const look = player?.look;
     if (look) return LOOK.scarf[look.scarf] ?? '#ffffff';
     return teamColor(actor.team);

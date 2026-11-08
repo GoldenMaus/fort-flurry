@@ -6,7 +6,7 @@ import {
   CHAT_MAX, CHUNK_BYTES, CONN_KILL_BYTES, DEFAULT_LOOK, LOOK, NAME_MAX, ROOM_CODE_ALPHABET,
   ROOM_CODE_LEN, SIEGE, SNAP_DROP_BYTES,
 } from './constants.js';
-import { MAPS } from './maps.js';
+import { ARENAS, MAPS, mapsForMode } from './maps.js';
 
 const TAU = Math.PI * 2;
 const INPUT_BYTES = 14;
@@ -225,9 +225,12 @@ export function sanitizeSettings(partial, base = DEFAULT_SETTINGS) {
   const out = { mode: base.mode, mapId: base.mapId, difficulty: base.difficulty, waveCount: base.waveCount };
   if (partial === null || typeof partial !== 'object') return out;
   if (Object.values(MODE).includes(partial.mode)) out.mode = partial.mode;
-  if (MAPS.some((m) => m.id === partial.mapId)) out.mapId = partial.mapId;
+  if ([...MAPS, ...ARENAS].some((m) => m.id === partial.mapId)) out.mapId = partial.mapId;
   if (Object.values(DIFFICULTY).includes(partial.difficulty)) out.difficulty = partial.difficulty;
   if (SIEGE.waveCounts.includes(partial.waveCount)) out.waveCount = partial.waveCount;
+  // Classic has its own arena and no other mode offers it, so mode and map move together.
+  const pool = mapsForMode(out.mode);
+  if (!pool.some((m) => m.id === out.mapId)) out.mapId = pool[0].id;
   return out;
 }
 

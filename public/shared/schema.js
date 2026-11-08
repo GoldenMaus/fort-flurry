@@ -4,11 +4,13 @@
 // NOTE: 0 is a valid value of TEAM, ACTOR, BALL, STRUCT and PICKUP. Never truth-test them.
 
 export const GAME_NAME = 'Fort Flurry';
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
-export const MODE = Object.freeze({ SIEGE: 'siege', FORTWARS: 'fortwars', FFA: 'ffa' });
+export const MODE = Object.freeze({ SIEGE: 'siege', FORTWARS: 'fortwars', FFA: 'ffa', CLASSIC: 'classic' });
 // Display labels. UI must use these, never hardcode.
-export const MODE_NAME = Object.freeze({ siege: 'Siege', fortwars: 'Fort Face-Off', ffa: 'Free-for-All' });
+export const MODE_NAME = Object.freeze({ siege: 'Siege', fortwars: 'Fort Face-Off', ffa: 'Free-for-All', classic: 'Classic' });
+// Team-versus-team modes: two sides, the lobby team picker, a truce rope in BUILD, rounds.
+export const TEAM_MODES = Object.freeze([MODE.FORTWARS, MODE.CLASSIC]);
 export const DIFFICULTY = Object.freeze({ COZY: 'cozy', NORMAL: 'normal', BLIZZARD: 'blizzard' });
 
 // Game phases (inside a running match). The lobby is a Room state, not a phase.

@@ -82,6 +82,15 @@ Up to 8 kids. How to Play and the title screen must use this premise.
   null; freezing a leader who leads by `leaderBonusLead` or more counts as 2 freezes, and the renderer draws
   a paper crown on them. Ties: more hits landed, then a shared win.
 
+### 2.4 Classic (id `classic`; PvP knockout duels, 2–8 kids including bots)
+- `TEAM.A` vs `TEAM.B` with the Face-Off team picker (`TEAM_MODES`); Start needs a kid on each team. Played only on the Corner Lot (`ARENAS`, `modes:['classic']`), which no other mode offers; `sanitizeSettings` keeps mode and map in step through `mapsForMode`.
+- Round: `BUILD` for `CLASSIC.buildTime` (8 s) with the truce rope (own half only, throws ignored). Each kid may own `CLASSIC.itemsPerKid` (3) structs at once from `CLASSIC.tools` (Snow Wall, Spare Coat, Spoon Flinger, at most `pultsPerKid` flinger), for free. `canPlace` counts structs with `ownerId === q.me`, so demolishing your own in BUILD gives the placement back. No Flakes, cards, repair, patch, or building in FIGHT; bots place their own three.
+- `FIGHT` lasts up to `CLASSIC.roundTime` (75 s) with no Colonel. Each kid has `CLASSIC.hits` (3) hearts: any enemy hit costs one, an Iceball `iceHits` (2). Warmth mirrors hearts (`hp = maxHp × hearts / hits`) with no regen; a kid at 0 is knocked out for the round (frozen, no thaw, no respawn). A kid who joins mid-round starts knocked out.
+- A team with no kid standing loses the round. At the timeout the team with more hearts left wins. Both wiped at once, or equal hearts at the timeout, goes to more hits that round, then `g.rng()`. First to `roundsToWin` (3); `ROUND_END` lasts `roundEndTime`.
+- From round 2, kid speed and throw speed scale by `speedUpPerRound^(round−1)`, capped at `maxSpeedUp`. Meta `speedMul` carries it, and the client folds it into the predicted kid's mods.
+- One Iceball (`PICKUP.ICE`) appears at `map.pickupSpot` every `pickupEvery` s of FIGHT when none is on the field.
+- `PROTOCOL_VERSION` is 2 from this mode on.
+
 ## 3. Core mechanics (numbers are in constants.js)
 
 - **Motion:** acceleration + drag. On ice: low accel, low drag, cannot pack snow.

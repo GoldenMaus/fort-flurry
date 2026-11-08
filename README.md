@@ -17,8 +17,9 @@ There is nothing to install and no accounts. One player's browser hosts each mat
 - **Siege:** everyone together against waves of neighborhood kids and two bosses. Keep Colonel Carrot standing.
 - **Fort Face-Off:** Mitten Brigade against Scarf Squad, each team guarding its own fort.
 - **Free-for-All:** every kid for themselves.
+- **Classic:** quick knockout duels on the small Corner Lot. Eight seconds to place three free things, then three hits and you're out for the round. Every round gets a bit faster, and the first team to win 3 rounds takes it.
 
-Three maps: Maple Court, Wobble Pond and Recess Yard.
+Three maps: Maple Court, Wobble Pond and Recess Yard, plus the Corner Lot for Classic.
 
 ## Controls
 

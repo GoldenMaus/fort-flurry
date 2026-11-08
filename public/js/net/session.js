@@ -660,10 +660,13 @@ export class Session {
     v.blizzard = m.blizzard;
     if (v.cw) v.cw.truce = m.truce ? { ...v.map.truce, active: true } : null;
     const cards = m.cards?.[this.me] ?? [];
-    const key = cards.join();
+    const speed = m.speedMul ?? 1;
+    const key = `${cards.join()}|${speed}`;
     if (key !== this._modsKey) {
       this._modsKey = key;
-      this._mods = modsFromCards(cards);
+      const base = modsFromCards(cards);
+      // Classic speeds every kid up each round, so prediction must move as fast as the host.
+      this._mods = speed === 1 ? base : { ...base, speedMul: base.speedMul * speed, throwSpeedMul: base.throwSpeedMul * speed };
       if (this._pred) this._pred.mods = this._mods;
       if (v.you) v.you.mods = this._mods;
     }

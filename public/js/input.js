@@ -1,7 +1,7 @@
 // All player input: keyboard and mouse, touch twin-stick, and the standard gamepad.
 // Input is the only producer of the `ui` object the renderer draws from (SPEC 11.0, 11.1).
 import { AFLAG, BTN, EMOTES, PHASE, MODE, STRUCT } from '../shared/schema.js';
-import { BUILD, CELL, KID, THROW } from '../shared/constants.js';
+import { BUILD, CELL, CLASSIC, KID, THROW } from '../shared/constants.js';
 import { canPlace, demolishState } from '../shared/physics.js';
 import { Emitter } from './ui/dom.js';
 
@@ -345,6 +345,7 @@ export class Input extends Emitter {
       actors: view.actors,
       flakes: meta?.flakes?.[team] ?? 0,
       team,
+      me: me.id,
       x: me.x,
       y: me.y,
       range: KID.buildRange * (you?.mods?.buildRangeMul ?? 1),
@@ -479,9 +480,10 @@ export class Input extends Emitter {
   }
 
   cycleTool(dir) {
-    const at = TOOLS.indexOf(this._tool);
-    const next = at < 0 ? (dir > 0 ? 0 : TOOLS.length - 1) : (at + dir + TOOLS.length) % TOOLS.length;
-    this.setTool(TOOLS[next]);
+    const tools = this.view?.mode === MODE.CLASSIC ? [...CLASSIC.tools, 'demolish'] : TOOLS;
+    const at = tools.indexOf(this._tool);
+    const next = at < 0 ? (dir > 0 ? 0 : tools.length - 1) : (at + dir + tools.length) % tools.length;
+    this.setTool(tools[next]);
   }
 
   // ---- internals: keyboard --------------------------------------------------------
@@ -514,6 +516,7 @@ export class Input extends Emitter {
         if (n < EMOTES.length) { this.emit('emote', n); this.setShout(false); }
       } else if (TOOL_BY_DIGIT.has(digit)) {
         const k = TOOL_BY_DIGIT.get(digit);
+        if (this.view?.mode === MODE.CLASSIC && !CLASSIC.tools.includes(k)) return;
         this.setTool(this._tool === k ? null : k);
       }
       return;

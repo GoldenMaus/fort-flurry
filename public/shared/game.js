@@ -7,10 +7,10 @@
 // insertion order.
 
 import {
-  ACTOR, AFLAG, AUX, BALL, BTN, CMD, DIFFICULTY, EMOTES, EV, MODE, MODE_NAME, PHASE, PICKUP, SFX, STRUCT, TEAM, TEAM_NAME,
+  ACTOR, AFLAG, AUX, BALL, BTN, CMD, DIFFICULTY, EMOTES, EV, MODE, MODE_NAME, PHASE, PICKUP, SFX, STRUCT, TEAM, TEAM_MODES, TEAM_NAME,
 } from './schema.js';
 import {
-  BOSS, BUILD, CELL, DEMOLISH_REFUND, DIFF, DT, FAIR_SHARE, FFA, FOES, FORTWARS, KID, MAX_ACTORS, MAX_INPUT_BACKLOG,
+  BOSS, BUILD, CELL, CLASSIC, DEMOLISH_REFUND, DIFF, DT, FAIR_SHARE, FFA, FOES, FORTWARS, KID, MAX_ACTORS, MAX_INPUT_BACKLOG,
   PICKUP_DROP_CHANCE, SIEGE, SIM_HZ, SPECIAL, TEAMMATE_DEMOLISH_COOLDOWN, THROW,
 } from './constants.js';
 import { createRng } from './rng.js';
@@ -131,6 +131,10 @@ export class Game {
     this.flakes = {};
     this.countMul = 1;
     this.suddenDeath = false;
+    this.classic = this.mode === MODE.CLASSIC;
+    this.teamMode = TEAM_MODES.includes(this.mode);
+    this.speedMul = 1;
+    this.roundHits = {};
 
     this.actors = new Map();
     this.structs = new Map();
@@ -335,6 +339,7 @@ export class Game {
       leaderId: this.mode === MODE.FFA ? this.leaderId() : null,
       pultLimit,
       patchesLeft: this.patches[TEAM.A] ?? 0,
+      speedMul: this.speedMul,
     };
   }
 
@@ -368,6 +373,8 @@ export class Game {
       if (this.mode === MODE.FFA) this.flakes[record.team] ??= FFA.startFlakes;
       const kid = this.actors.get(record.id);
       this.emit({ e: EV.RESPAWN, id: kid.id, x: kid.x, y: kid.y });
+      // A Classic round already under way: the newcomer sits it out and plays from the next.
+      if (this.classic && this.phase !== PHASE.BUILD) this.knockOut(kid);
     }
     this.stampAhead = 0;
   }
@@ -494,8 +501,18 @@ export class Game {
   // Returns the warmth or hp actually taken, so callers can tell a hit from a pass-through.
   damageActor(target, amt, source = null, opts = {}) {
     if (this.actors.get(target.id) !== target || (target.flags & UNTOUCHABLE) !== 0) return 0;
-    const dealt = amt * target.takeDmgMul;
-    target.hp -= dealt;
+    let dealt = amt * target.takeDmgMul;
+    if (this.classic && target.kind === ACTOR.KID) {
+      // Classic counts hearts, not warmth: any enemy hit is one, an Iceball two. Warmth only
+      // mirrors them, so the warmth bar and the freeze below work unchanged.
+      target.hearts = Math.max(0, target.hearts - (opts.kind === BALL.ICE ? CLASSIC.iceHits : 1));
+      const left = (target.maxHp * target.hearts) / CLASSIC.hits;
+      dealt = target.hp - left;
+      target.hp = left;
+      if (source !== null) this.roundHits[source.team] = (this.roundHits[source.team] ?? 0) + 1;
+    } else {
+      target.hp -= dealt;
+    }
     const fromKid = source !== null && source.kind === ACTOR.KID;
     if (fromKid) source.stats.hits += 1;
     this.emit({ e: EV.HIT, id: target.id, amt: dealt, x: target.x, y: target.y, by: source?.id ?? 0, k: opts.kind ?? -1 });
@@ -668,7 +685,9 @@ export class Game {
       // Host-only from here down: none of this crosses the wire.
       slot: this.freeSlot(p.team), tx: 0, ty: 0, armed: 0, cancelHeld: false,
       frozenT: 0, thawProgress: 0, graceT: 0, sinceHit: 0, offer: null, nextTeamDemolish: 0,
+      hearts: CLASSIC.hits,
     };
+    if (this.classic) kid.mods = this.classicMods();
     this.placeKid(kid, this.homePoint(kid));
     kid.tx = kid.x;
     kid.ty = kid.y;
@@ -689,7 +708,7 @@ export class Game {
 
   homePoint(kid) {
     const { spawns } = this.map;
-    if (this.mode === MODE.FORTWARS) {
+    if (this.teamMode) {
       const list = spawns.fortwars[kid.team === TEAM.B ? 1 : 0];
       return list[kid.slot % list.length];
     }
@@ -981,6 +1000,7 @@ export class Game {
   }
 
   stepFrozenKid(kid, kids, warmTeammates, cocoa) {
+    if (this.classic) return; // a Classic knockout lasts the round: no thaw, no respawn
     if ((warmTeammates.get(kid.team) ?? 0) === 0) kid.frozenT = Math.min(kid.frozenT, KID.loneAutoThaw);
     kid.frozenT -= DT;
 
@@ -1021,7 +1041,7 @@ export class Game {
     }
     kid.sinceHit += DT;
     let heat = 0;
-    if (kid.sinceHit >= KID.regenDelay) heat += KID.regenPerSec * kid.mods.regenMul;
+    if (!this.classic && kid.sinceHit >= KID.regenDelay) heat += KID.regenPerSec * kid.mods.regenMul;
     if (cocoa) heat += BUILD[STRUCT.COCOA].healPerSec;
     if (heat > 0) kid.hp = Math.min(kid.maxHp, kid.hp + heat * DT);
 
@@ -1070,6 +1090,7 @@ export class Game {
     kid.flags &= ~AFLAG.GRACE;
     kid.thawProgress = 0;
     if (this.mode === MODE.SIEGE) kid.frozenT = KID.frozenAutoThaw;
+    else if (this.classic) kid.frozenT = 0;
     else kid.frozenT = this.mode === MODE.FORTWARS ? FORTWARS.respawnTime : FFA.respawnTime;
     this.emit({ e: EV.FREEZE, id: kid.id, by: source?.id ?? 0 });
     if (source === null || source.kind !== ACTOR.KID) return;
@@ -1082,6 +1103,8 @@ export class Game {
       this.creditFlakes(source, FORTWARS.flakesPerFreeze, kid.x, kid.y);
     } else if (this.mode === MODE.FFA) {
       this.creditFlakes(source, FFA.flakesPerFreeze, kid.x, kid.y);
+    } else if (this.classic) {
+      this.teamFreezes[source.team] = (this.teamFreezes[source.team] ?? 0) + 1;
     }
   }
 
@@ -1149,6 +1172,10 @@ export class Game {
   resetKidForRound(kid) {
     this.clearAiming(kid);
     kid.flags &= AFLAG.AFK;
+    if (this.classic) {
+      kid.hearts = CLASSIC.hits;
+      kid.mods = this.classicMods();
+    }
     kid.hp = kid.maxHp;
     kid.balls = Math.min(KID.startBalls, kid.maxBalls);
     kid.special = null;
@@ -1203,11 +1230,11 @@ export class Game {
     this.emit({ e: EV.P_DEL, id: p.id, k: p.kind, x: p.x, y: p.y, by: takenBy });
   }
 
-  dropPickup(x, y) {
+  dropPickup(x, y, only = null) {
     if (this.pickups.size >= MAX_PICKUPS) return;
     const cell = this.cw.cellOf(x, y);
     if (this.cw.isSolidCell(cell.cx, cell.cy)) return;
-    const kind = PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)];
+    const kind = only ?? PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)];
     this.nextPickupId += 1;
     const p = { id: this.nextPickupId, kind, x, y, expiresAt: this.tick + ticksOf(PICKUP_LIFE_SECONDS) };
     this.pickups.set(p.id, p);
@@ -1451,6 +1478,7 @@ export class Game {
 
   pultLimit(team) {
     if (this.mode === MODE.FFA) return 1;
+    if (this.classic) return 99; // Classic limits each kid instead, in canPlace
     const { base, perPlayer } = BUILD[STRUCT.PULT].limit;
     return base + perPlayer * Math.ceil(this.weightedPlayers(team));
   }
@@ -1471,12 +1499,14 @@ export class Game {
       pultLimit: this.pultLimit(kid.team),
       spendLeft: kid.spendLeft,
       patchesLeft: this.patches[kid.team] ?? 0,
+      me: kid.id,
       playersPresent: (id) => this.isPresent(id),
     };
   }
 
   buildingOpen(kid) {
-    return (this.phase === PHASE.BUILD || this.phase === PHASE.FIGHT) && (kid.flags & AFLAG.FROZEN) === 0;
+    const open = this.phase === PHASE.BUILD || (this.phase === PHASE.FIGHT && !this.classic);
+    return open && (kid.flags & AFLAG.FROZEN) === 0;
   }
 
   teamHasHuman(team) {
@@ -1503,8 +1533,9 @@ export class Game {
       this.deny(kid, state);
       return;
     }
-    const cost = state === 'ok' ? BUILD[k].cost : state === 'repair' ? repairCost(k) : SIEGE.colonelPatch.cost;
-    if (kid.isBot && this.teamHasHuman(kid.team)) {
+    const cost = this.classic ? 0 : state === 'ok' ? BUILD[k].cost : state === 'repair' ? repairCost(k) : SIEGE.colonelPatch.cost;
+    // In Classic every kid owns their own three placements, bots included.
+    if (kid.isBot && !this.classic && this.teamHasHuman(kid.team)) {
       // Humans decide what the team builds; bots only keep it standing, and only out of a
       // slice of the pool, so a bot can never spend the Flakes someone was saving.
       if (state !== 'repair' || (this.botBudget[kid.team] ?? 0) < cost) {
@@ -1544,7 +1575,13 @@ export class Game {
       this.deny(kid, state);
       return;
     }
-    if (struct.ownerId === kid.id || !this.isPresent(struct.ownerId)) {
+    if (this.classic) {
+      // Only your own, and the placement itself is the refund: canPlace counts what you own.
+      if (struct.ownerId !== kid.id) {
+        this.deny(kid, 'badCell');
+        return;
+      }
+    } else if (struct.ownerId === kid.id || !this.isPresent(struct.ownerId)) {
       const refund = Math.floor(DEMOLISH_REFUND * BUILD[struct.kind].cost * (struct.hp / struct.maxHp));
       this.awardFlakes(kid.team, refund, struct.x, struct.y);
     } else {
@@ -1883,6 +1920,9 @@ export class Game {
     } else if (this.mode === MODE.FORTWARS) {
       this.roundWins = { [TEAM.A]: 0, [TEAM.B]: 0 };
       this.openFortRound();
+    } else if (this.classic) {
+      this.roundWins = { [TEAM.A]: 0, [TEAM.B]: 0 };
+      this.openClassicRound();
     } else {
       for (const p of this.players.values()) this.flakes[p.team] = FFA.startFlakes;
       this.waveMeta = { name: MODE_NAME[MODE.FFA], sub: `First to ${FFA.freezesToWin} freezes`, boss: null };
@@ -1908,11 +1948,15 @@ export class Game {
       if (this.mode === MODE.SIEGE && this.wave > 1) this.banner('Wave cleared!', `Next up: ${info.name}`, 'wave');
       else if (this.mode === MODE.SIEGE) this.banner(info.name, 'Build your fort!', 'wave');
       else if (this.mode === MODE.FORTWARS) this.banner(info.name, 'Truce! Build up your side.', 'wave');
+      else if (this.classic) this.banner(info.name, `Place your ${CLASSIC.itemsPerKid} things!`, 'wave');
       else this.banner(info.name, 'Scatter and dig in!', 'wave');
     } else if (this.mode === MODE.SIEGE) {
       this.banner(info.name, info.sub, info.boss === null ? 'wave' : 'boss');
     } else if (this.mode === MODE.FORTWARS) {
       this.banner('The truce is over!', 'Knock down their Colonel!', 'wave');
+    } else if (this.classic) {
+      const sub = this.speedMul > 1 ? `Faster now: ${Math.round(this.speedMul * 100)}% speed!` : `${CLASSIC.hits} hits and you're out!`;
+      this.banner('Snowballs up!', sub, 'wave');
     } else {
       this.banner('Snowballs up!', info.sub, 'wave');
     }
@@ -1921,9 +1965,10 @@ export class Game {
   beginFight() {
     if (this.phase !== PHASE.BUILD) return;
     this.autoPickCards();
-    if (this.mode === MODE.FORTWARS) this.cw.truce = null;
+    if (this.teamMode) this.cw.truce = null;
     let seconds = null;
     if (this.mode === MODE.FORTWARS) seconds = FORTWARS.roundTime;
+    else if (this.classic) seconds = CLASSIC.roundTime;
     else if (this.mode === MODE.FFA) seconds = FFA.matchTime;
     this.setPhase(PHASE.FIGHT, seconds);
     for (const kid of this.kids()) kid.balls = kid.maxBalls;
@@ -1931,6 +1976,7 @@ export class Game {
     this.doneTick = null;
     if (this.mode === MODE.FORTWARS) this.nextDropTick = this.tick + ticksOf(FORTWARS.pickupEvery);
     else if (this.mode === MODE.FFA) this.nextDropTick = this.tick + ticksOf(FFA.pickupEvery);
+    else if (this.classic) this.nextDropTick = this.tick + ticksOf(CLASSIC.pickupEvery);
     this.announcePhase();
   }
 
@@ -1939,6 +1985,7 @@ export class Game {
     if (this.phase === PHASE.OVER) return;
     if (this.mode === MODE.SIEGE) this.stepSiege();
     else if (this.mode === MODE.FORTWARS) this.stepFortwars();
+    else if (this.classic) this.stepClassic();
     else this.stepFfa();
     for (const kid of this.kids()) this.deriveKidFlags(kid);
   }
@@ -2100,6 +2147,79 @@ export class Game {
     }
   }
 
+  // -- Classic --
+
+  classicMods() {
+    const base = modsFromCards([]);
+    return { ...base, speedMul: base.speedMul * this.speedMul, throwSpeedMul: base.throwSpeedMul * this.speedMul };
+  }
+
+  knockOut(kid) {
+    kid.hearts = 0;
+    this.freezeKid(kid, null);
+  }
+
+  openClassicRound() {
+    this.round += 1;
+    this.clearBalls();
+    for (const p of this.pickups.values()) this.removePickup(p, 0);
+    for (const s of this.structs.values()) this.removeStruct(s, 'reset');
+    this.flakes[TEAM.A] = 0;
+    this.flakes[TEAM.B] = 0;
+    this.teamFreezes = { [TEAM.A]: 0, [TEAM.B]: 0 };
+    this.roundHits = { [TEAM.A]: 0, [TEAM.B]: 0 };
+    this.speedMul = Math.min(CLASSIC.maxSpeedUp, CLASSIC.speedUpPerRound ** (this.round - 1));
+    this.cw.truce = { ...this.map.truce, active: true };
+    for (const kid of this.kids()) this.resetKidForRound(kid);
+    this.waveMeta = { name: `Round ${this.round}`, sub: `First to ${CLASSIC.roundsToWin}`, boss: null };
+    this.openBuild(CLASSIC.buildTime);
+    if (this.round > 1) this.announcePhase();
+  }
+
+  stepClassic() {
+    if (this.phase === PHASE.BUILD) {
+      this.stepBuildClock();
+      return;
+    }
+    if (this.phase === PHASE.ROUND_END) {
+      if (this.tick >= this.endsAtTick) this.openClassicRound();
+      return;
+    }
+    if (this.tick >= this.nextDropTick) {
+      this.nextDropTick = this.tick + ticksOf(CLASSIC.pickupEvery);
+      const spot = this.map.pickupSpot ?? { x: this.map.w / 2, y: this.map.h / 2 };
+      if (this.pickups.size === 0) this.dropPickup(spot.x, spot.y, PICKUP.ICE);
+    }
+    const upA = this.standing(TEAM.A);
+    const upB = this.standing(TEAM.B);
+    if (upA === 0 || upB === 0) {
+      this.endRound(upA === upB ? this.classicTieBreak() : upA === 0 ? TEAM.B : TEAM.A);
+    } else if (this.tick >= this.endsAtTick) {
+      const heartsA = this.heartsLeft(TEAM.A);
+      const heartsB = this.heartsLeft(TEAM.B);
+      this.endRound(heartsA === heartsB ? this.classicTieBreak() : heartsA > heartsB ? TEAM.A : TEAM.B);
+    }
+  }
+
+  standing(team) {
+    let n = 0;
+    for (const kid of this.kids()) if (kid.team === team && (kid.flags & AFLAG.FROZEN) === 0) n += 1;
+    return n;
+  }
+
+  heartsLeft(team) {
+    let n = 0;
+    for (const kid of this.kids()) if (kid.team === team && (kid.flags & AFLAG.FROZEN) === 0) n += kid.hearts;
+    return n;
+  }
+
+  classicTieBreak() {
+    const a = this.roundHits[TEAM.A] ?? 0;
+    const b = this.roundHits[TEAM.B] ?? 0;
+    if (a !== b) return a > b ? TEAM.A : TEAM.B;
+    return this.rng() < 0.5 ? TEAM.A : TEAM.B;
+  }
+
   dropCentreLinePickup() {
     const { truce, w, h } = this.map;
     for (let tries = 0; tries < 8; tries++) {
@@ -2126,16 +2246,17 @@ export class Game {
 
   endRound(winner) {
     this.roundWins[winner] += 1;
+    const rules = this.classic ? CLASSIC : FORTWARS;
     const name = TEAM_NAME[winner];
     const score = `${this.roundWins[TEAM.A]} to ${this.roundWins[TEAM.B]}`;
-    if (this.roundWins[winner] >= FORTWARS.roundsToWin) {
+    if (this.roundWins[winner] >= rules.roundsToWin) {
       this.finish({
         title: `${name} wins!`, winnerTeam: winner, winners: this.kids().filter((k) => k.team === winner).map((k) => k.id), won: true,
-        summary: `${name} takes the block, ${score}!`,
+        summary: this.classic ? `${name} takes the lot, ${score}!` : `${name} takes the block, ${score}!`,
       });
       return;
     }
-    this.setPhase(PHASE.ROUND_END, FORTWARS.roundEndTime);
+    this.setPhase(PHASE.ROUND_END, rules.roundEndTime);
     this.banner(`${name} wins round ${this.round}!`, score, 'info');
   }
 
@@ -2262,10 +2383,11 @@ export class Game {
       }
       return (this.wave - 1 + within) / span;
     }
-    if (this.mode === MODE.FORTWARS) {
-      const rounds = FORTWARS.roundsToWin * 2 - 1;
+    if (this.teamMode) {
+      const rules = this.classic ? CLASSIC : FORTWARS;
+      const rounds = rules.roundsToWin * 2 - 1;
       let within = 0;
-      if (this.phase === PHASE.FIGHT) within = Math.min(1, elapsed / FORTWARS.roundTime);
+      if (this.phase === PHASE.FIGHT) within = Math.min(1, elapsed / rules.roundTime);
       else if (this.phase !== PHASE.BUILD) within = 1;
       return (this.round - 1 + within) / rounds;
     }

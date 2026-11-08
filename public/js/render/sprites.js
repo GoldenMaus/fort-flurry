@@ -4,6 +4,7 @@
 // an hp drop is a hit, a falling CHARGING flag is a throw, a new ball near a foe is that foe's arm.
 
 import { ACTOR, AFLAG, AUX, BALL, MODE } from '../../shared/schema.js';
+import { TEAM_MODES } from '../../shared/schema.js';
 import { BOSS, CELL, DEFAULT_LOOK } from '../../shared/constants.js';
 import { SpriteAtlas, blit } from './sprite-atlas.js';
 import {
@@ -407,7 +408,7 @@ export class ActorArt {
     const atlas = this.atlas;
     const look = info.player?.look ?? DEFAULT_LOOK;
     const view = info.view;
-    const teamColor = view?.mode === MODE.FORTWARS ? teamColorOf(a.team) : null;
+    const teamColor = TEAM_MODES.includes(view?.mode) ? teamColorOf(a.team) : null;
     this._kidLook(st, look, teamColor, a.team);
     this._reactions(a, st, step);
     const held = AFLAG.FROZEN | AFLAG.STUNNED;

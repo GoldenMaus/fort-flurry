@@ -1,6 +1,6 @@
 // End of a match. Who sees Play Again follows hostId live, because the host can change while this
 // screen is open (SPEC 11.2).
-import { MODE, TEAM_NAME } from '../../shared/schema.js';
+import { MODE, TEAM_MODES, TEAM_NAME } from '../../shared/schema.js';
 import { viewerWon } from '../../shared/protocol.js';
 import { el } from './dom.js';
 import { AWARD_COPY } from './copy.js';
@@ -14,6 +14,10 @@ const MAX_HEROES = 6;
 function headline(result, meId, names) {
   const won = viewerWon(result, meId);
   if (result.mode === MODE.SIEGE) return won ? 'You held the block!' : 'Colonel Carrot took a tumble';
+  if (result.mode === MODE.CLASSIC) {
+    if (won) return 'Your team took the lot!';
+    return result.winnerTeam === null ? 'What a snowy mess!' : `${TEAM_NAME[result.winnerTeam]} took the lot`;
+  }
   if (result.mode === MODE.FORTWARS) {
     if (won) return 'Your fort is still standing!';
     return result.winnerTeam === null ? 'What a snowy mess!' : `${TEAM_NAME[result.winnerTeam]} rule the block`;
@@ -65,7 +69,7 @@ export class ResultsScreen {
     this.title.textContent = headline(result, session.me, names);
     this.summary.textContent = result.summary ?? '';
 
-    const team = (who) => (result.mode === MODE.FORTWARS ? who.team : undefined);
+    const team = (who) => (TEAM_MODES.includes(result.mode) ? who.team : undefined);
     this.heroes.replaceChildren(...result.winners.slice(0, MAX_HEROES).flatMap((id, i) => {
       const who = info.get(id);
       if (!who?.look) return [];
@@ -88,7 +92,7 @@ export class ResultsScreen {
       const who = info.get(p.id);
       return { id: p.id, name: who?.name ?? '?', team: who?.team, look: who?.look, ...p.stats };
     });
-    this.stats.replaceChildren(statRows(rows, session.me, result.mode === MODE.FORTWARS));
+    this.stats.replaceChildren(statRows(rows, session.me, TEAM_MODES.includes(result.mode)));
     this.chat.root.hidden = !!this.ui.roomInfo.solo;
     this.grid.classList.toggle('no-chat', !!this.ui.roomInfo.solo);
     this.chat.rebuild();
