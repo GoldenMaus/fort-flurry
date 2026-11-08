@@ -350,9 +350,10 @@ export class Overlay {
     ctx.setTransform(r.pixelRatio, 0, 0, r.pixelRatio, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    this.drawNameTags(ctx, view, r);
+    // Classic's pixel art paints its own name tags and hearts, and shows hits by flashing.
+    if (!r.retroActive) this.drawNameTags(ctx, view, r);
     this.drawBubbles(ctx, view, r);
-    this.drawNumbers(ctx, r);
+    if (!r.retroActive) this.drawNumbers(ctx, r);
     this.drawFrost(ctx, view, r, dt);
     this.drawSplats(ctx);
     this.drawEdgeArrows(ctx, view, r, r.time);

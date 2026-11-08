@@ -1159,3 +1159,15 @@ kbd { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .snow, .arc { animation: none; }
 }
+
+/* Classic's retro look: square panels, hard drop shadows and a blocky monospaced face. */
+#hud.retro, #hud.retro * { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace !important; }
+#hud.retro .patch, #hud.retro button, #hud.retro .tray, #hud.retro .tip, #hud.retro .deny, #hud.retro .banner,
+#hud.retro .ready-btn, #hud.retro .wave-name, #hud.retro .tray-info { border-radius: 0 !important; }
+#hud.retro .patch, #hud.retro .tray, #hud.retro .ready-btn { box-shadow: 4px 4px 0 rgba(20, 20, 48, 0.9) !important; }
+#hud.retro .phase-label, #hud.retro .wave-name, #hud.retro .tip, #hud.retro .banner, #hud.retro .ready-word { text-transform: uppercase; letter-spacing: 0.04em; }
+#hud.retro .tip { letter-spacing: 0; font-size: 0.9em; }
+@media (max-height: 480px) {
+  /* Classic shows a 'things left' pill over the tray in BUILD: lift the tips clear of it. */
+  #hud.retro.phase-build .hud-low { bottom: 84px; }
+}

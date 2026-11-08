@@ -13,9 +13,9 @@ const TIPS = Object.freeze({
     pad: 'Protect Colonel Carrot! Press RB for a tool, then X near him to build.',
   },
   classicBuild: {
-    kbm: 'Place 3 free things on your side: press 1, 3 or 4, then click the snow.',
-    touch: 'Place 3 free things on your side: tap a tool, then touch the snow.',
-    pad: 'Place 3 free things on your side: press RB for a tool, then X.',
+    kbm: 'Press 1, 3 or 4, then click your side. 3 free things!',
+    touch: 'Tap a tool, then tap your side!',
+    pad: 'RB for a tool, then X on your side. 3 free things!',
   },
   ready: {
     kbm: "Press R when you're ready.",

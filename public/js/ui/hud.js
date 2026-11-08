@@ -330,6 +330,7 @@ export class Hud {
     const canBuild = view.phase === PHASE.BUILD || (view.phase === PHASE.FIGHT && view.mode !== MODE.CLASSIC);
     m.toggle(this.root, 'phase-build', view.phase === PHASE.BUILD);
     m.toggle(this.root, 'phase-fight', view.phase === PHASE.FIGHT);
+    m.toggle(this.root, 'retro', view.mode === MODE.CLASSIC);
     if (view.phase !== this.lastPhase) {
       // On touch a tool hides the throw stick, and in compact FIGHT the tray too, so a tool still
       // out from BUILD would leave a phone player unable to throw. Put it away as the fight starts.

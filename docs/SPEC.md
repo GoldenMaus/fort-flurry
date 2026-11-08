@@ -90,6 +90,7 @@ Up to 8 kids. How to Play and the title screen must use this premise.
 - From round 2, kid speed and throw speed scale by `speedUpPerRound^(round−1)`, capped at `maxSpeedUp`. Meta `speedMul` carries it, and the client folds it into the predicted kid's mods.
 - One Iceball (`PICKUP.ICE`) appears at `map.pickupSpot` every `pickupEvery` s of FIGHT when none is on the field.
 - `PROTOCOL_VERSION` is 2 from this mode on.
+- Look: Classic is drawn as original pixel art (`render/retro.js`): the world is painted at one pixel per two world units into a small canvas and scaled up without smoothing, with pixel hearts and KO over each kid. Name tags, aiming aids, the build preview and the HUD stay sharp, and the HUD takes a square, monospaced retro style (`#hud.retro`).
 
 ## 3. Core mechanics (numbers are in constants.js)
 

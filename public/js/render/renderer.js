@@ -23,6 +23,7 @@ import { Atmosphere } from './atmosphere.js';
 import { Overlay, headHeight } from './overlay.js';
 import { P } from './palette.js';
 import { HIGH_Z, MAX_PIXELS_HIGH, MAX_PIXELS_LOW, VIEW_AREA, VIEW_AREA_TOUCH, Z_LIFT } from './world.js';
+import { RetroPainter } from './retro.js';
 
 export { Z_LIFT, VIEW_AREA };
 
@@ -364,6 +365,7 @@ export class Renderer {
 
   ballImpact(ev) {
     const kind = this.ballKinds.get(ev.id);
+    if (this.retro) this.retro.burst(ev.x, ev.y, kind === BALL.ICE);
     this.ballKinds.delete(ev.id);
     this.ballTeams.delete(ev.id);
     this.ballStart.delete(ev.id);
@@ -401,6 +403,7 @@ export class Renderer {
     const x = a ? a.x : ev.x;
     const value = Math.max(1, Math.round(ev.amt));
     this.overlay.addNumber(x, y, String(value), mine ? 'hurt' : big ? 'big' : 'hit', ev.id, value);
+    if (this.retro) this.retro.flash(ev.id, this.time);
     if (mine) {
       this.overlay.addSplat(this.cssW, this.cssH);
       this.addTrauma(ev.k === -1 ? 0.42 : 0.22);
@@ -683,6 +686,22 @@ export class Renderer {
     this.S = S;
     this.tx = tx;
     this.ty = ty;
+
+    // Classic is drawn as pixel art instead (SPEC 2.4); the aiming aids and overlay stay sharp on top.
+    this.retroActive = view.mode === MODE.CLASSIC;
+    if (this.retroActive) {
+      if (!this.retro) this.retro = new RetroPainter();
+      this.retro.paint(ctx, view, u, this, dt);
+      ctx.setTransform(S, 0, 0, S, tx, ty);
+      this.drawReticles(ctx, view, u);
+      if (view.me) this.drawTrajectory(ctx, view, view.me, u);
+      this.drawBuildAid(ctx, view, u);
+      this.overlay.draw(ctx, view, u, this, dt);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = 1;
+      this.stats.drawMs = performance.now() - started;
+      return;
+    }
 
     // 1. Ground. Letterbox colour only matters on displays wider than the map.
     const map = this.map;
