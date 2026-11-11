@@ -5,6 +5,7 @@ import { BIN, CLOSE, ERR, MSG } from '../../shared/schema.js';
 import { MAX_INBOUND_BYTES, MAX_PLAYERS, P2P_ID_PREFIX } from '../../shared/constants.js';
 import { ChunkAssembler, SEND, chunkMessage, makeRoomCode, sendVerdict } from '../../shared/protocol.js';
 import { HostWorker, LOCAL_CONN } from './transport-local.js';
+import { RELAY_ICE_SERVERS } from './relays.js';
 
 const PEER_OPEN_TIMEOUT_MS = 10000;
 const CONNECT_DEADLINE_MS = 20000;
@@ -38,14 +39,15 @@ export async function loadPeerJs() {
   return peerLib;
 }
 
-// Passing config replaces PeerJS's defaults outright, so its TURN servers survive only
-// if they are merged back in here.
+// PeerJS's bundled TURN relay is gone (its hosts no longer resolve), so only its STUN server is
+// kept from its defaults. Relays come from relays.js.
 function peerOptions(util) {
+  const stun = util.defaultConfig.iceServers.filter((s) => [].concat(s.urls).every((u) => u.startsWith('stun:')));
   return {
     debug: 0,
     config: {
       ...util.defaultConfig,
-      iceServers: [...util.defaultConfig.iceServers, { urls: 'stun:stun.cloudflare.com:3478' }],
+      iceServers: [...stun, { urls: 'stun:stun.cloudflare.com:3478' }, ...RELAY_ICE_SERVERS],
       ...configOverride,
     },
   };
